@@ -1,6 +1,8 @@
 <?php
 use App\Http\Controllers\QuestionController;
 
+Route::get('questions/select', [QuestionController::class, 'selectCourse'])->name('questions.select');
+
 Route::resource('questions', QuestionController::class);
 
 /*

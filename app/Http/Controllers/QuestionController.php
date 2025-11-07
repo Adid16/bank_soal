@@ -1,6 +1,6 @@
 <?php
 namespace App\Http\Controllers; // <-- WAJIB: Namespace untuk Controller Anda
-
+use App\Models\Course;
 
 use App\Http\Controllers\Controller;
 use App\Models\Question; // <-- Baris ini harus ada!
@@ -10,31 +10,37 @@ use Illuminate\Support\Facades\DB;
 class QuestionController extends Controller
 {
 
+    public function selectCourse()
+{
+    $courses = Course::all();
+    return view('questions.select_course', compact('courses'));
+}
+
       public function index()
     {
-        // Ambil semua soal dari database
-        $questions = Question::latest()->get(); 
+        // Mengambil semua Mata Kuliah, sekaligus memuat semua soal yang terkait
+        $courses = Course::with('questions')->get(); 
         
-        // Mengarahkan ke view questions.index dan mengirimkan data soal
-        return view('questions.index', compact('questions')); 
+        return view('questions.index', compact('courses'));
     }
 
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'text' => 'required|string',
-            'options.*.key' => 'required|in:a,b,c,d',
-            'options.*.text' => 'required|string',
-            'correct_answer_key' => 'required|in:a,b,c,d',
-        ]);
+        'text' => 'required|string',
+        'course_id' => 'required|exists:courses,id', // <-- Validasi Mata Kuliah
+        'options.*.key' => 'required|string|max:1',
+        'options.*.text' => 'required|string',
+        'correct_answer_key' => 'required|string|max:1',
+    ]);
 
-        DB::transaction(function () use ($validatedData) {
-            // 1. Buat Soal
-            $question = Question::create([
-                'text' => $validatedData['text'],
-                'correct_answer_key' => $validatedData['correct_answer_key'],
-                // default type multiple_choice
-            ]);
+    DB::transaction(function () use ($validatedData) {
+        $question = Question::create([
+            'text' => $validatedData['text'],
+            'course_id' => $validatedData['course_id'], // <-- Simpan ID Mata Kuliah
+            'correct_answer_key' => $validatedData['correct_answer_key'],
+            'type' => 'multiple_choice',
+        ]);
 
             // 2. Simpan Pilihan Jawaban
             $question->options()->createMany($validatedData['options']);
@@ -44,12 +50,20 @@ class QuestionController extends Controller
     }
     // app/Http/Controllers/QuestionController.php
 
-public function create()
+public function create(Request $request) // Menerima request untuk mengambil course_id
 {
-    // Mengarahkan ke form pembuatan soal
-    return view('questions.create'); 
-}
+    $courseId = $request->get('course_id');
+    
+    if (!$courseId) {
+        // Jika course_id tidak ada, redirect kembali ke halaman select course
+        return redirect()->route('questions.select')->with('error', 'Pilih Mata Kuliah terlebih dahulu.');
+    }
 
+    $course = Course::findOrFail($courseId); // Ambil data Mata Kuliah yang dipilih
+
+    // Sekarang, hanya kirim satu data course ke view create
+    return view('questions.create', compact('course')); 
+}
 // app/Http/Controllers/QuestionController.php
 
 public function update(Request $request, Question $question)
@@ -87,8 +101,8 @@ public function update(Request $request, Question $question)
  */
 public function edit(Question $question)
 {
-    // Karena Route Model Binding, $question sudah berisi data soal dan relasi options-nya.
-    return view('questions.edit', compact('question'));
+    $courses = Course::all();
+    return view('questions.edit', compact('question', 'courses'));
 }
 
 
